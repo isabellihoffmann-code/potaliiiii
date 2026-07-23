@@ -3,90 +3,207 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controle de LEDs + PWM</title>
+    <title>Controle IoT</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        
-        * { font-family: 'Inter', sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
 
         body {
             min-height: 100vh;
-            transition: all 0.5s ease;
-            background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 50%, #0d1225 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0a0e1a, #1a1f35);
+            padding: 20px;
             color: #e2e8f0;
         }
 
-        .glassmorphism {
+        .container {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border-radius: 24px;
+            padding: 30px;
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        h1 {
+            color: #60a5fa;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot.sync {
+            background: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+        .dot.online {
+            background: #10b981;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+        }
+        .dot.offline {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .status-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+        }
+
+        .topic-area {
+            margin-bottom: 20px;
+        }
+
+        .topic-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .topic-input {
+            width: 100%;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .topic-input:focus {
+            border-color: #3b82f6;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .led-label {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
         }
 
         .led-circle {
             width: 80px;
             height: 80px;
             border-radius: 50%;
-            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            margin: 0 auto;
+            margin: 15px auto;
+            transition: all 0.5s;
             background: #1a1f35;
             box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.5);
         }
 
-        .led-on-blue {
+        .led-circle.on-blue {
             background: radial-gradient(circle at 35% 35%, #60a5fa, #2563eb);
-            box-shadow: 0 0 30px rgba(59, 130, 246, 0.5), 0 0 60px rgba(59, 130, 246, 0.2);
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
             animation: glow-blue 2s infinite;
         }
 
-        .led-on-green {
+        .led-circle.on-green {
             background: radial-gradient(circle at 35% 35%, #4ade80, #16a34a);
-            box-shadow: 0 0 30px rgba(74, 222, 128, 0.5), 0 0 60px rgba(74, 222, 128, 0.2);
+            box-shadow: 0 0 30px rgba(74, 222, 128, 0.5);
             animation: glow-green 2s infinite;
         }
 
         @keyframes glow-blue {
-            0%, 100% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.5), 0 0 60px rgba(59, 130, 246, 0.2); }
-            50% { box-shadow: 0 0 50px rgba(59, 130, 246, 0.8), 0 0 80px rgba(59, 130, 246, 0.4); }
+            0%, 100% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.5); }
+            50% { box-shadow: 0 0 50px rgba(59, 130, 246, 0.8); }
         }
 
         @keyframes glow-green {
-            0%, 100% { box-shadow: 0 0 30px rgba(74, 222, 128, 0.5), 0 0 60px rgba(74, 222, 128, 0.2); }
-            50% { box-shadow: 0 0 50px rgba(74, 222, 128, 0.8), 0 0 80px rgba(74, 222, 128, 0.4); }
+            0%, 100% { box-shadow: 0 0 30px rgba(74, 222, 128, 0.5); }
+            50% { box-shadow: 0 0 50px rgba(74, 222, 128, 0.8); }
         }
 
-        .bargraph-track {
-            width: 100%;
-            height: 28px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 14px;
-            overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .led-status {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            margin-bottom: 12px;
         }
 
-        .bargraph-fill {
-            height: 100%;
-            border-radius: 14px;
-            transition: width 0.3s ease;
-            background: linear-gradient(90deg, #f59e0b, #f97316, #ef4444);
-            width: 0%;
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
         }
 
-        .btn-action {
-            padding: 10px 20px;
+        .btn {
+            padding: 10px 24px;
+            border: none;
             border-radius: 10px;
             font-weight: 600;
-            transition: all 0.3s;
-            border: none;
+            font-size: 14px;
             cursor: pointer;
-            font-size: 0.85rem;
+            transition: all 0.3s;
             flex: 1;
+            min-width: 80px;
         }
 
-        .btn-action:active { transform: scale(0.95); }
-        .btn-action:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn:active {
+            transform: scale(0.95);
+        }
+        .btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
 
         .btn-on-blue {
             background: linear-gradient(135deg, #3b82f6, #2563eb);
@@ -115,177 +232,149 @@
             transform: translateY(-2px);
         }
 
-        .btn-pwm {
-            background: linear-gradient(135deg, #d97706, #f59e0b);
-            color: white;
-            padding: 8px 16px;
-            font-size: 0.8rem;
-        }
-        .btn-pwm:hover:not(:disabled) {
-            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4);
-            transform: translateY(-2px);
+        /* Bargraph */
+        .bargraph-wrap {
+            width: 100%;
+            margin: 10px 0;
         }
 
-        .status-pill {
-            padding: 6px 16px;
-            border-radius: 9999px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            transition: all 0.5s ease;
-        }
-        .status-dot.sync { background: #f59e0b; animation: pulse-dot 1.5s infinite; }
-        .status-dot.online { background: #10b981; box-shadow: 0 0 12px rgba(16, 185, 129, 0.5); }
-        .status-dot.offline { background: #ef4444; }
-
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(0.8); }
-        }
-
-        .topic-input {
+        .bargraph-track {
+            width: 100%;
+            height: 24px;
             background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            overflow: hidden;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 10px 16px;
-            color: white;
-            width: 100%;
-            font-size: 0.875rem;
-            outline: none;
-        }
-        .topic-input:focus { border-color: #3b82f6; }
-
-        .grid-leds {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            width: 100%;
-            margin: 0 auto;
         }
 
-        .led-control-group {
+        .bargraph-fill {
+            height: 100%;
+            border-radius: 12px;
+            transition: width 0.3s ease;
+            background: linear-gradient(90deg, #f59e0b, #f97316, #ef4444);
+            width: 0%;
+        }
+
+        .bargraph-labels {
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            padding: 20px 16px;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            transition: all 0.3s ease;
+            justify-content: space-between;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 11px;
+            margin-top: 4px;
         }
-        .led-control-group:hover { background: rgba(255, 255, 255, 0.06); }
+
+        .bargraph-value {
+            color: #f59e0b;
+            font-size: 28px;
+            font-weight: 700;
+            margin: 5px 0;
+        }
+
+        .pot-info {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            margin-top: 5px;
+        }
 
         @media (max-width: 640px) {
-            .grid-leds { grid-template-columns: 1fr; }
-            .led-circle { width: 60px; height: 60px; }
+            .container {
+                padding: 20px;
+            }
+            h1 {
+                font-size: 20px;
+            }
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            .led-circle {
+                width: 60px;
+                height: 60px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="min-h-screen flex items-center justify-center p-4">
-        <div class="glassmorphism rounded-2xl p-6 md:p-8 w-full max-w-5xl relative">
-            
-            <!-- Header -->
-            <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-                <div>
-                    <h1 class="text-2xl md:text-3xl font-bold text-blue-400">
-                        💡 Controle IoT
-                    </h1>
-                    <p class="text-sm opacity-60 mt-1">LEDs 13 e 12 (Botão) + LED 9 (PWM com Potenciômetro)</p>
-                </div>
-                <div class="status-pill bg-opacity-20 bg-white/5">
-                    <span id="statusDot" class="status-dot sync"></span>
-                    <span id="statusText" class="text-sm font-medium">Sincronizando...</span>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div>
+                <h1>💡 Controle IoT</h1>
+                <div class="subtitle">LED 13, LED 12 e PWM com Potenciômetro</div>
+            </div>
+            <div class="status">
+                <span class="dot sync" id="dot"></span>
+                <span class="status-text" id="statusText">Sincronizando...</span>
+            </div>
+        </div>
+
+        <!-- Tópico -->
+        <div class="topic-area">
+            <label class="topic-label">📡 Tópico MQTT</label>
+            <input class="topic-input" id="topicInput" value="gerry_sanchez_led_exclusivo/arduino">
+        </div>
+
+        <!-- Grid -->
+        <div class="grid">
+            <!-- LED 13 -->
+            <div class="card">
+                <div class="led-label">🔵 LED 13</div>
+                <div class="led-circle" id="led13"></div>
+                <div class="led-status" id="status13">💤 Inativo</div>
+                <div class="btn-group">
+                    <button class="btn btn-on-blue" id="on13" disabled>Ligar</button>
+                    <button class="btn btn-off" id="off13" disabled>Desligar</button>
                 </div>
             </div>
 
-            <!-- Topic Input -->
-            <div class="mb-6">
-                <label class="text-xs font-semibold uppercase tracking-wider opacity-60 block mb-2">
-                    📡 Tópico MQTT
-                </label>
-                <input id="topicInput" type="text" value="gerry_sanchez_led_exclusivo/arduino" 
-                       class="topic-input" spellcheck="false">
-            </div>
-
-            <!-- LED Controls -->
-            <div class="grid-leds">
-                <!-- LED 13 -->
-                <div class="led-control-group">
-                    <span class="text-xs uppercase tracking-wider opacity-60 font-bold">🔵 LED 13</span>
-                    <div id="ledCircle13" class="led-circle"></div>
-                    <span id="ledStatus13" class="text-sm opacity-60">Inativo</span>
-                    <div class="flex gap-2 w-full">
-                        <button id="btnOn13" class="btn-action btn-on-blue" disabled>Ligar</button>
-                        <button id="btnOff13" class="btn-action btn-off" disabled>Desligar</button>
-                    </div>
-                </div>
-
-                <!-- LED 12 -->
-                <div class="led-control-group">
-                    <span class="text-xs uppercase tracking-wider opacity-60 font-bold">🟢 LED 12</span>
-                    <div id="ledCircle12" class="led-circle"></div>
-                    <span id="ledStatus12" class="text-sm opacity-60">Inativo</span>
-                    <div class="flex gap-2 w-full">
-                        <button id="btnOn12" class="btn-action btn-on-green" disabled>Ligar</button>
-                        <button id="btnOff12" class="btn-action btn-off" disabled>Desligar</button>
-                    </div>
-                </div>
-
-                <!-- LED 9 PWM -->
-                <div class="led-control-group">
-                    <span class="text-xs uppercase tracking-wider opacity-60 font-bold">🟡 LED 9 (PWM)</span>
-                    <div id="ledCircle9" class="led-circle"></div>
-                    <span id="ledStatus9" class="text-sm opacity-60">0%</span>
-                    
-                    <!-- Bargraph -->
-                    <div class="w-full">
-                        <div class="bargraph-track">
-                            <div id="bargraphFill" class="bargraph-fill" style="width: 0%;"></div>
-                        </div>
-                        <div class="flex justify-between text-xs opacity-40 mt-1">
-                            <span>0%</span>
-                            <span>50%</span>
-                            <span>100%</span>
-                        </div>
-                        <div id="bargraphValue" class="text-center text-2xl font-bold text-amber-500 mt-1">0%</div>
-                    </div>
-
-                    <!-- Controles PWM -->
-                    <div class="flex gap-2 w-full flex-wrap justify-center">
-                        <button id="btnPwm0" class="btn-action btn-off" disabled>0%</button>
-                        <button id="btnPwm25" class="btn-action btn-pwm" disabled>25%</button>
-                        <button id="btnPwm50" class="btn-action btn-pwm" disabled>50%</button>
-                        <button id="btnPwm75" class="btn-action btn-pwm" disabled>75%</button>
-                        <button id="btnPwm100" class="btn-action btn-pwm" disabled>100%</button>
-                    </div>
-
-                    <!-- Slider -->
-                    <input type="range" id="pwmSlider" min="0" max="255" value="0" 
-                           class="w-full h-2 rounded-lg appearance-none cursor-pointer"
-                           style="background: linear-gradient(to right, #f59e0b, #ef4444);"
-                           disabled>
-
-                    <!-- Potenciômetro Info -->
-                    <div class="text-xs opacity-40 mt-1">
-                        🎛️ Potenciômetro (A0): <span id="potValue">0</span>
-                    </div>
+            <!-- LED 12 -->
+            <div class="card">
+                <div class="led-label">🟢 LED 12</div>
+                <div class="led-circle" id="led12"></div>
+                <div class="led-status" id="status12">💤 Inativo</div>
+                <div class="btn-group">
+                    <button class="btn btn-on-green" id="on12" disabled>Ligar</button>
+                    <button class="btn btn-off" id="off12" disabled>Desligar</button>
                 </div>
             </div>
 
-            <!-- Footer -->
-            <div class="mt-6 text-center text-xs opacity-30 border-t border-gray-700 pt-4">
-                MQTT via HiveMQ • WebSockets Seguros (8884)
+            <!-- LED PWM -->
+            <div class="card">
+                <div class="led-label">🟡 LED PWM (Pino 9)</div>
+                <div class="led-circle" id="ledPwm"></div>
+                <div class="led-status" id="statusPwm">0%</div>
+
+                <div class="bargraph-wrap">
+                    <div class="bargraph-track">
+                        <div class="bargraph-fill" id="bargraph"></div>
+                    </div>
+                    <div class="bargraph-labels">
+                        <span>0%</span>
+                        <span>50%</span>
+                        <span>100%</span>
+                    </div>
+                    <div class="bargraph-value" id="pwmValue">0%</div>
+                </div>
+
+                <div class="pot-info">🎛️ Potenciômetro no pino A0</div>
+                <div class="badge">📊 AO VIVO</div>
+                <div class="pot-info" id="potValue">Valor analógico: 0</div>
             </div>
+        </div>
+
+        <div style="text-align:center;margin-top:20px;color:rgba(255,255,255,0.2);font-size:12px;border-top:1px solid rgba(255,255,255,0.05);padding-top:15px;">
+            MQTT via HiveMQ • WebSockets Seguros (8884)
         </div>
     </div>
 
@@ -300,82 +389,219 @@
         // ==========================================
         // DOM
         // ==========================================
-        const statusDot = document.getElementById('statusDot');
+        const dot = document.getElementById('dot');
         const statusText = document.getElementById('statusText');
         const topicInput = document.getElementById('topicInput');
 
-        const ledCircle13 = document.getElementById('ledCircle13');
-        const ledCircle12 = document.getElementById('ledCircle12');
-        const ledCircle9 = document.getElementById('ledCircle9');
-        const ledStatus13 = document.getElementById('ledStatus13');
-        const ledStatus12 = document.getElementById('ledStatus12');
-        const ledStatus9 = document.getElementById('ledStatus9');
-        const bargraphFill = document.getElementById('bargraphFill');
-        const bargraphValue = document.getElementById('bargraphValue');
+        const led13 = document.getElementById('led13');
+        const led12 = document.getElementById('led12');
+        const ledPwm = document.getElementById('ledPwm');
+        const status13 = document.getElementById('status13');
+        const status12 = document.getElementById('status12');
+        const statusPwm = document.getElementById('statusPwm');
+        const bargraph = document.getElementById('bargraph');
+        const pwmValue = document.getElementById('pwmValue');
         const potValue = document.getElementById('potValue');
 
-        const btnOn13 = document.getElementById('btnOn13');
-        const btnOff13 = document.getElementById('btnOff13');
-        const btnOn12 = document.getElementById('btnOn12');
-        const btnOff12 = document.getElementById('btnOff12');
-        const pwmSlider = document.getElementById('pwmSlider');
+        const on13 = document.getElementById('on13');
+        const off13 = document.getElementById('off13');
+        const on12 = document.getElementById('on12');
+        const off12 = document.getElementById('off12');
 
         // ==========================================
         // ESTADO
         // ==========================================
         let client = null;
         let connected = false;
-        let led13State = false;
-        let led12State = false;
-        let pwmValue = 0;
-        let pwmPercent = 0;
-        let potAnalog = 0;
 
         // ==========================================
         // FUNÇÕES UI
         // ==========================================
         function setStatus(status, msg) {
-            statusDot.className = 'status-dot';
+            dot.className = 'dot';
             if (status === 'sync') {
-                statusDot.classList.add('sync');
+                dot.classList.add('sync');
                 statusText.textContent = 'Sincronizando...';
             } else if (status === 'online') {
-                statusDot.classList.add('online');
+                dot.classList.add('online');
                 statusText.textContent = 'Online';
             } else if (status === 'offline') {
-                statusDot.classList.add('offline');
+                dot.classList.add('offline');
                 statusText.textContent = 'Offline';
             }
         }
 
         function setLED13(on) {
-            led13State = on;
-            ledCircle13.className = 'led-circle';
-            ledCircle13.classList.add(on ? 'led-on-blue' : '');
-            ledStatus13.textContent = on ? '🔆 Ativo' : '💤 Inativo';
-            ledStatus13.style.color = on ? '#60a5fa' : 'rgba(255,255,255,0.6)';
+            led13.className = 'led-circle';
+            led13.classList.add(on ? 'on-blue' : '');
+            status13.textContent = on ? '🔆 Ativo' : '💤 Inativo';
+            status13.style.color = on ? '#60a5fa' : 'rgba(255,255,255,0.6)';
         }
 
         function setLED12(on) {
-            led12State = on;
-            ledCircle12.className = 'led-circle';
-            ledCircle12.classList.add(on ? 'led-on-green' : '');
-            ledStatus12.textContent = on ? '🔆 Ativo' : '💤 Inativo';
-            ledStatus12.style.color = on ? '#4ade80' : 'rgba(255,255,255,0.6)';
+            led12.className = 'led-circle';
+            led12.classList.add(on ? 'on-green' : '');
+            status12.textContent = on ? '🔆 Ativo' : '💤 Inativo';
+            status12.style.color = on ? '#4ade80' : 'rgba(255,255,255,0.6)';
         }
 
         function setPWM(valor, percent, analog) {
-            pwmValue = valor;
-            pwmPercent = percent || Math.round((valor / 255) * 100);
-            
             // Atualiza círculo
             if (valor === 0) {
-                ledCircle9.className = 'led-circle';
+                ledPwm.className = 'led-circle';
+                ledPwm.style.background = '#1a1f35';
+                ledPwm.style.boxShadow = 'inset 0 4px 8px rgba(0,0,0,0.5)';
             } else {
-                ledCircle9.className = 'led-circle';
+                ledPwm.className = 'led-circle';
                 const intensity = 0.3 + (valor / 255) * 0.7;
                 const r = Math.round(245 * intensity);
                 const g = Math.round(158 * intensity);
                 const b = Math.round(11 * intensity);
-                ledCircle9.style.background = `radial-gradient(circle at 35% 35%, rgba(${r},${g},${b},0.8), rgba(${r},${g},${b},1))`;
-                ledCircle9.style
+                ledPwm.style.background = `radial-gradient(circle at 35% 35%, rgba(${r},${g},${b},0.8), rgba(${r},${g},${b},1))`;
+                ledPwm.style.boxShadow = `0 0 ${30 + percent}px rgba(245,158,11,${0.3 + percent/200})`;
+            }
+
+            // Atualiza bargraph
+            bargraph.style.width = percent + '%';
+            pwmValue.textContent = percent + '%';
+            statusPwm.textContent = percent + '%';
+
+            // Atualiza potenciômetro
+            if (analog !== undefined) {
+                potValue.textContent = 'Valor analógico: ' + analog + ' (0-1023)';
+            }
+        }
+
+        function setButtons(enabled) {
+            on13.disabled = !enabled;
+            off13.disabled = !enabled;
+            on12.disabled = !enabled;
+            off12.disabled = !enabled;
+        }
+
+        // ==========================================
+        // MQTT
+        // ==========================================
+        function generateClientId() {
+            return 'web_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+        }
+
+        function connect() {
+            const clientId = generateClientId();
+            client = new Paho.MQTT.Client(BROKER, PORT, clientId);
+
+            client.onConnectionLost = function() {
+                connected = false;
+                setStatus('offline', 'Offline');
+                setButtons(false);
+                setTimeout(connect, 5000);
+            };
+
+            client.onMessageArrived = function(msg) {
+                const payload = msg.payloadString.trim();
+                console.log('📨 Recebido:', payload);
+
+                // LED13
+                if (payload === 'LED13:1') {
+                    setLED13(true);
+                } else if (payload === 'LED13:0') {
+                    setLED13(false);
+                }
+                // LED12
+                else if (payload === 'LED12:1') {
+                    setLED12(true);
+                } else if (payload === 'LED12:0') {
+                    setLED12(false);
+                }
+                // PWM
+                else if (payload.startsWith('PWM:')) {
+                    const parts = payload.split(':');
+                    if (parts.length === 4) {
+                        const valor = parseInt(parts[1]);
+                        const percent = parseInt(parts[2]);
+                        const analog = parseInt(parts[3]);
+                        setPWM(valor, percent, analog);
+                    }
+                }
+            };
+
+            const options = {
+                useSSL: true,
+                timeout: 10,
+                onSuccess: function() {
+                    connected = true;
+                    setStatus('online', 'Online');
+                    setButtons(true);
+                    client.subscribe(TOPIC);
+                    console.log('📡 Inscrito em:', TOPIC);
+                },
+                onFailure: function() {
+                    connected = false;
+                    setStatus('offline', 'Offline');
+                    setButtons(false);
+                    setTimeout(connect, 5000);
+                }
+            };
+
+            client.connect(options);
+        }
+
+        function publish(command) {
+            if (!connected || !client) {
+                console.warn('❌ Não conectado');
+                return;
+            }
+            const msg = new Paho.MQTT.Message(command);
+            msg.destinationName = TOPIC;
+            msg.qos = 1;
+            client.send(msg);
+            console.log('📤 Enviado:', command);
+        }
+
+        // ==========================================
+        // EVENTOS
+        // ==========================================
+        on13.addEventListener('click', () => publish('LED13:1'));
+        off13.addEventListener('click', () => publish('LED13:0'));
+        on12.addEventListener('click', () => publish('LED12:1'));
+        off12.addEventListener('click', () => publish('LED12:0'));
+
+        topicInput.addEventListener('change', function() {
+            const novo = this.value.trim();
+            if (novo && novo !== TOPIC) {
+                TOPIC = novo;
+                localStorage.setItem('mqtt_topic', novo);
+                if (connected && client) {
+                    try { client.unsubscribe(TOPIC); } catch (e) {}
+                    client.subscribe(TOPIC);
+                }
+                console.log('📡 Tópico alterado:', TOPIC);
+            }
+        });
+
+        // ==========================================
+        // INICIALIZAÇÃO
+        // ==========================================
+        const savedTopic = localStorage.getItem('mqtt_topic');
+        if (savedTopic) {
+            topicInput.value = savedTopic;
+            TOPIC = savedTopic;
+        }
+
+        setLED13(false);
+        setLED12(false);
+        setPWM(0, 0);
+        setStatus('sync', 'Sincronizando...');
+        setButtons(false);
+
+        connect();
+
+        console.log('🚀 Sistema iniciado!');
+        console.log('📡 Tópico:', TOPIC);
+        console.log('💡 LED13: Botão ON/OFF');
+        console.log('💡 LED12: Botão ON/OFF');
+        console.log('🎛️ LED9 PWM: Controlado pelo potenciômetro');
+    </script>
+
+</body>
+</html>
