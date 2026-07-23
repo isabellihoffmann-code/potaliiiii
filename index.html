@@ -1,1 +1,381 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de LEDs + PWM</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * { font-family: 'Inter', sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
 
+        body {
+            min-height: 100vh;
+            transition: all 0.5s ease;
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a1f35 50%, #0d1225 100%);
+            color: #e2e8f0;
+        }
+
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .led-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            margin: 0 auto;
+            background: #1a1f35;
+            box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .led-on-blue {
+            background: radial-gradient(circle at 35% 35%, #60a5fa, #2563eb);
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.5), 0 0 60px rgba(59, 130, 246, 0.2);
+            animation: glow-blue 2s infinite;
+        }
+
+        .led-on-green {
+            background: radial-gradient(circle at 35% 35%, #4ade80, #16a34a);
+            box-shadow: 0 0 30px rgba(74, 222, 128, 0.5), 0 0 60px rgba(74, 222, 128, 0.2);
+            animation: glow-green 2s infinite;
+        }
+
+        @keyframes glow-blue {
+            0%, 100% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.5), 0 0 60px rgba(59, 130, 246, 0.2); }
+            50% { box-shadow: 0 0 50px rgba(59, 130, 246, 0.8), 0 0 80px rgba(59, 130, 246, 0.4); }
+        }
+
+        @keyframes glow-green {
+            0%, 100% { box-shadow: 0 0 30px rgba(74, 222, 128, 0.5), 0 0 60px rgba(74, 222, 128, 0.2); }
+            50% { box-shadow: 0 0 50px rgba(74, 222, 128, 0.8), 0 0 80px rgba(74, 222, 128, 0.4); }
+        }
+
+        .bargraph-track {
+            width: 100%;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .bargraph-fill {
+            height: 100%;
+            border-radius: 14px;
+            transition: width 0.3s ease;
+            background: linear-gradient(90deg, #f59e0b, #f97316, #ef4444);
+            width: 0%;
+        }
+
+        .btn-action {
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            flex: 1;
+        }
+
+        .btn-action:active { transform: scale(0.95); }
+        .btn-action:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .btn-on-blue {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+        .btn-on-blue:hover:not(:disabled) {
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-on-green {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+        }
+        .btn-on-green:hover:not(:disabled) {
+            box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-off {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+        .btn-off:hover:not(:disabled) {
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-pwm {
+            background: linear-gradient(135deg, #d97706, #f59e0b);
+            color: white;
+            padding: 8px 16px;
+            font-size: 0.8rem;
+        }
+        .btn-pwm:hover:not(:disabled) {
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .status-pill {
+            padding: 6px 16px;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transition: all 0.5s ease;
+        }
+        .status-dot.sync { background: #f59e0b; animation: pulse-dot 1.5s infinite; }
+        .status-dot.online { background: #10b981; box-shadow: 0 0 12px rgba(16, 185, 129, 0.5); }
+        .status-dot.offline { background: #ef4444; }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .topic-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 10px 16px;
+            color: white;
+            width: 100%;
+            font-size: 0.875rem;
+            outline: none;
+        }
+        .topic-input:focus { border-color: #3b82f6; }
+
+        .grid-leds {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .led-control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 20px 16px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.3s ease;
+        }
+        .led-control-group:hover { background: rgba(255, 255, 255, 0.06); }
+
+        @media (max-width: 640px) {
+            .grid-leds { grid-template-columns: 1fr; }
+            .led-circle { width: 60px; height: 60px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="glassmorphism rounded-2xl p-6 md:p-8 w-full max-w-5xl relative">
+            
+            <!-- Header -->
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold text-blue-400">
+                        💡 Controle IoT
+                    </h1>
+                    <p class="text-sm opacity-60 mt-1">LEDs 13 e 12 (Botão) + LED 9 (PWM com Potenciômetro)</p>
+                </div>
+                <div class="status-pill bg-opacity-20 bg-white/5">
+                    <span id="statusDot" class="status-dot sync"></span>
+                    <span id="statusText" class="text-sm font-medium">Sincronizando...</span>
+                </div>
+            </div>
+
+            <!-- Topic Input -->
+            <div class="mb-6">
+                <label class="text-xs font-semibold uppercase tracking-wider opacity-60 block mb-2">
+                    📡 Tópico MQTT
+                </label>
+                <input id="topicInput" type="text" value="gerry_sanchez_led_exclusivo/arduino" 
+                       class="topic-input" spellcheck="false">
+            </div>
+
+            <!-- LED Controls -->
+            <div class="grid-leds">
+                <!-- LED 13 -->
+                <div class="led-control-group">
+                    <span class="text-xs uppercase tracking-wider opacity-60 font-bold">🔵 LED 13</span>
+                    <div id="ledCircle13" class="led-circle"></div>
+                    <span id="ledStatus13" class="text-sm opacity-60">Inativo</span>
+                    <div class="flex gap-2 w-full">
+                        <button id="btnOn13" class="btn-action btn-on-blue" disabled>Ligar</button>
+                        <button id="btnOff13" class="btn-action btn-off" disabled>Desligar</button>
+                    </div>
+                </div>
+
+                <!-- LED 12 -->
+                <div class="led-control-group">
+                    <span class="text-xs uppercase tracking-wider opacity-60 font-bold">🟢 LED 12</span>
+                    <div id="ledCircle12" class="led-circle"></div>
+                    <span id="ledStatus12" class="text-sm opacity-60">Inativo</span>
+                    <div class="flex gap-2 w-full">
+                        <button id="btnOn12" class="btn-action btn-on-green" disabled>Ligar</button>
+                        <button id="btnOff12" class="btn-action btn-off" disabled>Desligar</button>
+                    </div>
+                </div>
+
+                <!-- LED 9 PWM -->
+                <div class="led-control-group">
+                    <span class="text-xs uppercase tracking-wider opacity-60 font-bold">🟡 LED 9 (PWM)</span>
+                    <div id="ledCircle9" class="led-circle"></div>
+                    <span id="ledStatus9" class="text-sm opacity-60">0%</span>
+                    
+                    <!-- Bargraph -->
+                    <div class="w-full">
+                        <div class="bargraph-track">
+                            <div id="bargraphFill" class="bargraph-fill" style="width: 0%;"></div>
+                        </div>
+                        <div class="flex justify-between text-xs opacity-40 mt-1">
+                            <span>0%</span>
+                            <span>50%</span>
+                            <span>100%</span>
+                        </div>
+                        <div id="bargraphValue" class="text-center text-2xl font-bold text-amber-500 mt-1">0%</div>
+                    </div>
+
+                    <!-- Controles PWM -->
+                    <div class="flex gap-2 w-full flex-wrap justify-center">
+                        <button id="btnPwm0" class="btn-action btn-off" disabled>0%</button>
+                        <button id="btnPwm25" class="btn-action btn-pwm" disabled>25%</button>
+                        <button id="btnPwm50" class="btn-action btn-pwm" disabled>50%</button>
+                        <button id="btnPwm75" class="btn-action btn-pwm" disabled>75%</button>
+                        <button id="btnPwm100" class="btn-action btn-pwm" disabled>100%</button>
+                    </div>
+
+                    <!-- Slider -->
+                    <input type="range" id="pwmSlider" min="0" max="255" value="0" 
+                           class="w-full h-2 rounded-lg appearance-none cursor-pointer"
+                           style="background: linear-gradient(to right, #f59e0b, #ef4444);"
+                           disabled>
+
+                    <!-- Potenciômetro Info -->
+                    <div class="text-xs opacity-40 mt-1">
+                        🎛️ Potenciômetro (A0): <span id="potValue">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-6 text-center text-xs opacity-30 border-t border-gray-700 pt-4">
+                MQTT via HiveMQ • WebSockets Seguros (8884)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURAÇÕES
+        // ==========================================
+        const BROKER = 'broker.hivemq.com';
+        const PORT = 8884;
+        let TOPIC = 'gerry_sanchez_led_exclusivo/arduino';
+
+        // ==========================================
+        // DOM
+        // ==========================================
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const topicInput = document.getElementById('topicInput');
+
+        const ledCircle13 = document.getElementById('ledCircle13');
+        const ledCircle12 = document.getElementById('ledCircle12');
+        const ledCircle9 = document.getElementById('ledCircle9');
+        const ledStatus13 = document.getElementById('ledStatus13');
+        const ledStatus12 = document.getElementById('ledStatus12');
+        const ledStatus9 = document.getElementById('ledStatus9');
+        const bargraphFill = document.getElementById('bargraphFill');
+        const bargraphValue = document.getElementById('bargraphValue');
+        const potValue = document.getElementById('potValue');
+
+        const btnOn13 = document.getElementById('btnOn13');
+        const btnOff13 = document.getElementById('btnOff13');
+        const btnOn12 = document.getElementById('btnOn12');
+        const btnOff12 = document.getElementById('btnOff12');
+        const pwmSlider = document.getElementById('pwmSlider');
+
+        // ==========================================
+        // ESTADO
+        // ==========================================
+        let client = null;
+        let connected = false;
+        let led13State = false;
+        let led12State = false;
+        let pwmValue = 0;
+        let pwmPercent = 0;
+        let potAnalog = 0;
+
+        // ==========================================
+        // FUNÇÕES UI
+        // ==========================================
+        function setStatus(status, msg) {
+            statusDot.className = 'status-dot';
+            if (status === 'sync') {
+                statusDot.classList.add('sync');
+                statusText.textContent = 'Sincronizando...';
+            } else if (status === 'online') {
+                statusDot.classList.add('online');
+                statusText.textContent = 'Online';
+            } else if (status === 'offline') {
+                statusDot.classList.add('offline');
+                statusText.textContent = 'Offline';
+            }
+        }
+
+        function setLED13(on) {
+            led13State = on;
+            ledCircle13.className = 'led-circle';
+            ledCircle13.classList.add(on ? 'led-on-blue' : '');
+            ledStatus13.textContent = on ? '🔆 Ativo' : '💤 Inativo';
+            ledStatus13.style.color = on ? '#60a5fa' : 'rgba(255,255,255,0.6)';
+        }
+
+        function setLED12(on) {
+            led12State = on;
+            ledCircle12.className = 'led-circle';
+            ledCircle12.classList.add(on ? 'led-on-green' : '');
+            ledStatus12.textContent = on ? '🔆 Ativo' : '💤 Inativo';
+            ledStatus12.style.color = on ? '#4ade80' : 'rgba(255,255,255,0.6)';
+        }
+
+        function setPWM(valor, percent, analog) {
+            pwmValue = valor;
+            pwmPercent = percent || Math.round((valor / 255) * 100);
+            
+            // Atualiza círculo
+            if (valor === 0) {
+                ledCircle9.className = 'led-circle';
+            } else {
+                ledCircle9.className = 'led-circle';
+                const intensity = 0.3 + (valor / 255) * 0.7;
+                const r = Math.round(245 * intensity);
+                const g = Math.round(158 * intensity);
+                const b = Math.round(11 * intensity);
+                ledCircle9.style.background = `radial-gradient(circle at 35% 35%, rgba(${r},${g},${b},0.8), rgba(${r},${g},${b},1))`;
+                ledCircle9.style
